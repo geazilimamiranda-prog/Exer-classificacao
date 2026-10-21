@@ -7,7 +7,7 @@ import seaborn as sns
 from sklearn.datasets import make_classification
 from sklearn.model_selection import train_test_split
 from sklearn.svm import SVC
-from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
+from sklearn.metrics import confusion_matrix
 
 # ---------------------------------------------------------
 # Configuração da Página
@@ -38,16 +38,17 @@ def carregar_dados_e_treinar_modelo():
     )
     
     # Ajustando a escala das features para valores realistas de peso e espessura
-    # Peso em gramas: média ~150g, variação de ~20g
     peso = X[:, 0] * 10 + 150 
-    # Espessura em mm: média ~15mm, variação de ~3mm
     espessura = X[:, 1] * 2 + 15 
     
     X_scaled = np.column_stack((peso, espessura))
     
     # Mapeamento numérico -> Classes de Qualidade
-    # 0: Aprovada, 1: Retrabalho, 2: Refugo
     mapeamento_classes = {0: 'Aprovada', 1: 'Retrabalho', 2: 'Refugo'}
+    
+    # Criando DataFrame completo com os dados gerados
+    df_dados = pd.DataFrame(X_scaled, columns=['Peso_gramas', 'Espessura_mm'])
+    df_dados['Status'] = [mapeamento_classes[val] for val in y]
     
     # Divisão em Treino e Teste
     X_train, X_test, y_train, y_test = train_test_split(
@@ -58,9 +59,9 @@ def carregar_dados_e_treinar_modelo():
     modelo_svm = SVC(kernel='rbf', C=1.0, probability=True, random_state=42)
     modelo_svm.fit(X_train, y_train)
     
-    return modelo_svm, X_test, y_test, mapeamento_classes
+    return modelo_svm, X_test, y_test, mapeamento_classes, df_dados
 
-modelo, X_test, y_test, mapeamento_classes = carregar_dados_e_treinar_modelo()
+modelo, X_test, y_test, mapeamento_classes, df_dados = carregar_dados_e_treinar_modelo()
 
 # ---------------------------------------------------------
 # Layout em Colunas
@@ -107,11 +108,11 @@ with col_input:
         
         # Exibição do resultado com destaque por cor
         if classe_predita_nome == 'Aprovada':
-            st.success(f"✅ **PEÇA APROVADA**\n\nA peça atende aos requisitos de qualidade.")
+            st.success("✅ **PEÇA APROVADA**\n\nA peça atende aos requisitos de qualidade.")
         elif classe_predita_nome == 'Retrabalho':
-            st.warning(f"⚠️ **RETRABALHO NECESSÁRIO**\n\nA peça necessita de ajustes ou reusinagem.")
+            st.warning("⚠️ **RETRABALHO NECESSÁRIO**\n\nA peça necessita de ajustes ou reusinagem.")
         else:  # Refugo
-            st.error(f"❌ **PEÇA REFUGO**\n\nA peça está fora das tolerâncias e deve ser descartada.")
+            st.error("❌ **PEÇA REFUGO**\n\nA peça está fora das tolerâncias e deve ser descartada.")
 
 # ---------------------------------------------------------
 # Coluna 2: Desempenho do Modelo (Matriz de Confusão)
@@ -125,8 +126,8 @@ with col_metrics:
     labels_nomes = [mapeamento_classes[i] for i in range(3)]
     cm = confusion_matrix(y_test, y_pred)
     
-    # Plotagem da Matriz de Confusão com Matplotlib e Seaborn
-    fig, ax = plt.subplots(figsize=(6, 5))
+    # Plotagem da Matriz de Confusão
+    fig, ax = plt.subplots(figsize=(6, 4))
     sns.heatmap(
         cm, 
         annot=True, 
@@ -139,7 +140,30 @@ with col_metrics:
     )
     ax.set_xlabel('Classe Preditada', fontsize=11, fontweight='bold')
     ax.set_ylabel('Classe Real', fontsize=11, fontweight='bold')
-    ax.set_title('Matriz de Confusão', fontsize=13, fontweight='bold')
+    ax.set_title('Matriz de Confusão', fontsize=12, fontweight='bold')
     plt.tight_layout()
     
     st.pyplot(fig)
+
+# ---------------------------------------------------------
+# Seção do Dataframe (Abaixo dos Gráficos e Painéis)
+# ---------------------------------------------------------
+st.write("---")
+st.subheader("📁 Base de Dados Sintéticos Utilizada")
+st.write(f"Total de registros na base: **{len(df_dados)} amostras**")
+
+# Filtro interativo para consultar o dataframe
+filtro_status = st.multiselect(
+    "Filtrar por Status da Peça:",
+    options=df_dados['Status'].unique(),
+    default=df_dados['Status'].unique()
+)
+
+df_filtrado = df_dados[df_dados['Status'].isin(filtro_status)]
+
+# Exibição do DataFrame interativo
+st.dataframe(
+    df_filtrado, 
+    use_container_width=True,
+    height=300
+)
